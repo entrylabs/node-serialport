@@ -1,5 +1,7 @@
-### 빌드 방법
+### 일렉트론 빌드 방법
+
 node-pre-gyp configure
+
 node-pre-gyp build
 
 32비트
