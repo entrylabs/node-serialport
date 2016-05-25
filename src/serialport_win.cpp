@@ -10,6 +10,8 @@
 #ifdef WIN32
 
 #define MAX_BUFFER_SIZE 1000
+#define ASCII_XOFF 19
+#define ASCII_XON 17
 
 
 struct WindowsPlatformOptions : OpenBatonPlatformOptions
@@ -126,6 +128,41 @@ void EIO_Open(uv_work_t* req) {
   case SERIALPORT_STOPBITS_TWO:
     dcb.StopBits = TWOSTOPBITS;
     break;
+  }
+  
+  dcb.fOutX	= FALSE;
+  dcb.fInX	= FALSE;
+  dcb.fOutxCtsFlow = FALSE;
+  dcb.fRtsControl = RTS_CONTROL_DISABLE; 
+  dcb.fOutxDsrFlow = FALSE;
+  dcb.fDtrControl = DTR_CONTROL_DISABLE; 
+  
+  if(data->rtscts) {
+	dcb.fOutX	= FALSE;
+	dcb.fInX	= FALSE;
+	dcb.fOutxCtsFlow = TRUE;
+	dcb.fRtsControl = RTS_CONTROL_HANDSHAKE; 
+	dcb.fOutxDsrFlow = FALSE;
+	dcb.fDtrControl = DTR_CONTROL_DISABLE; 
+  } else if(data->xon && data->xoff) {
+	dcb.fOutX	= TRUE;
+	dcb.fInX	= TRUE;
+	dcb.fTXContinueOnXoff = TRUE;
+	dcb.XoffChar = ASCII_XOFF;
+	dcb.XoffLim = bufferSize - (bufferSize / 4);
+	dcb.XonChar = ASCII_XON;
+	dcb.XonLim = bufferSize - (bufferSize / 2);
+	dcb.fOutxCtsFlow = FALSE;
+	dcb.fRtsControl = RTS_CONTROL_DISABLE; 
+	dcb.fOutxDsrFlow = FALSE;
+	dcb.fDtrControl = DTR_CONTROL_DISABLE;
+  } else if(data->dsrdtr) {
+	dcb.fOutX	= FALSE;
+	dcb.fInX	= FALSE;
+	dcb.fOutxCtsFlow = FALSE;
+	dcb.fRtsControl = RTS_CONTROL_DISABLE; 
+	dcb.fOutxDsrFlow = TRUE;
+	dcb.fDtrControl = DTR_CONTROL_HANDSHAKE; 
   }
 
   if(!SetCommState(file, &dcb)) {
