@@ -1,61 +1,85 @@
-# AppVeyor file
-# http://www.appveyor.com/docs/appveyor-yml
-
 os: unstable
-
-# Fix line endings on Windows
-init:
-  - git config --global core.autocrlf true
-
-# environment variables
 environment:
-  NODE_PRE_GYP_GITHUB_TOKEN:
-    secure: azLeMAlIn7bfsIjPriD3O8kg3/uLPNOnAE6FgwPvIT+MWSlMsG3giURb7SxQ01tB
+  prebuild_upload:
+    secure: a/seaM+nUnQWhWUnbyz8fl9vPwuyqDTrFviptDykYp2c46vdTvlAxU6yqD/PpDiI
+  COVERALLS_REPO_TOKEN:
+    secure: iDcAJCYgJK4tffyzEHbMVR8DatJcIN8eY0h29p9JQkl43TcEcm6Z6JLOBpGDk1MJ
 
   matrix:
-  - nodejs_version: "0.10"
-  - nodejs_version: "0.12"
-  - nodejs_version: "4.2"
-  - nodejs_version: "5.1"
+  - nodejs_version: "4"
+  - nodejs_version: "6"
+  - binary_builder: "true"
+    nodejs_version: "8"
 
 platform:
-  - x86
-  - x64
+- x86
+- x64
+
+# Dropping support for node 4 on 32 windows because it has isuses with ssl certs and npm
+matrix:
+  exclude:
+    - platform: x86
+      nodejs_version: "4"
+
 
 install:
-  - cmd: ECHO %nodejs_version%
-  - cmd: ECHO %platform%
-  - cmd: ECHO %APPVEYOR_REPO_COMMIT_MESSAGE%
+- ps: Update-NodeJsInstallation (Get-NodeJsLatestBuild $env:nodejs_version) $env:platform;
+# upgrade npm if on node 4 as npm2 doesn't like our dev peer deps
+- ps: >
+    if ($env:nodejs_version -eq "4") {
+      npm install -g npm | Write-Host;
+    }
+    npm config set progress false
+    npm config set spin false
 
-  - cmd: SET PATH=%cd%\node_modules\.bin\;%PATH%
-  - ps:  Update-NodeJsInstallation (Get-NodeJsLatestBuild $env:nodejs_version) $env:platform
-  - cmd: IF %nodejs_version% LSS 1 npm -g install npm
-  - cmd: IF %nodejs_version% LSS 1 set PATH=%APPDATA%\npm;%PATH%
+- ps: >
+    @{
+      "nodejs_version" = $env:nodejs_version
+      "platform" = $env:platform
+      "node binary version" = $(node -v)
+      "node platform@arch" = $(node -p 'process.platform + process.arch')
+      "npm version" = $(npm -v)
+      "APPVEYOR_REPO_COMMIT_MESSAGE" = $env:APPVEYOR_REPO_COMMIT_MESSAGE
+      "git latest tag" = "$(git describe --tags --always HEAD)"
+      "appveyor_repo_tag" = $env:appveyor_repo_tag
+    } | Out-String | Write-Host;
 
-  - cmd: SET COMMIT_MSG="%APPVEYOR_REPO_COMMIT_MESSAGE%"
-  - cmd: SET PUBLISH_BINARY=false
-  # Check to verify the branch is the same than latest tag, if so
-  # then we publish the binaries if everything else is successful.
-  - cmd: git describe --tags --always HEAD > _git_tag.tmp
-  - cmd: SET /p GIT_TAG=<_git_tag.tmp
-  - cmd: ECHO %GIT_TAG%
-  - cmd: ECHO %APPVEYOR_REPO_BRANCH%
-  - cmd: DEL _git_tag.tmp
-  - cmd: IF x%APPVEYOR_REPO_BRANCH%==x%GIT_TAG% SET PUBLISH_BINARY=true
-  # Or look for commit message containing `[publish binary]`
-  - cmd: IF not x%COMMIT_MSG:[publish binary]=%==x%COMMIT_MSG% SET PUBLISH_BINARY=true
-  - cmd: ECHO %PUBLISH_BINARY%
+# Check if we're building the latest tag, if so
+# then we publish the binaries if tests pass.
+- ps: >
+    if ($env:appveyor_repo_tag -match "true" -and ("$(git describe --tags --always HEAD)" -eq $env:appveyor_repo_tag_name)) {
+      $env:publish_binary = $env:binary_builder;
+    }
+    if ($env:publish_binary -eq "true") {
+      "We're publishing a binary!" | Write-Host
+    } else {
+      "We're not publishing a binary" | Write-Host
+    }
+    true;
+
+# We don't currently have a port to test on windows
+# - ps: $env:TEST_PORT = "COM1";
 
 build_script:
-  - cmd: npm install --build-from-source --msvs_version=2013 --verbose
+- npm install --build-from-source
 
 test_script:
-  - cmd: npm test
+- ps: >
+    if ($env:nodejs_version -ne "4") {
+      npm run lint
+    }
+    node ./
 
-on_success:
-  - cmd: IF %PUBLISH_BINARY%==true (node-pre-gyp package 2>&1)
-  - cmd: IF %PUBLISH_BINARY%==true (node-pre-gyp-github publish --release 2>&1)
-  - cmd: IF %PUBLISH_BINARY% == true (node-pre-gyp clean)
-  - cmd: IF %PUBLISH_BINARY% == true (npm install --fallback-to-build=false)
+# If we run npm test in powershell it'll have the wrong encoding so we have to do it like this
+- npm test
+
+- ps: >
+    if ($env:publish_binary -eq "true") {
+      npm run prebuild-upload
+    }
+    true;
+
+after_test:
+- pip install codecov && codecov --file coverage\coverage.json
 
 deploy: OFF

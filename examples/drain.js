@@ -1,45 +1,33 @@
-var SerialPort = require("serialport").SerialPort;
+/* eslint-disable node/no-missing-require */
+'use strict';
+const Buffer = require('safe-buffer').Buffer;
+const SerialPort = require('serialport');
+const port = new SerialPort('/dev/my-great-device');
 
-var sp = new SerialPort("/dev/cu.Cubelet-RGB", {
-  baudrate: 38400
+port.on('open', () => {
+  console.log('port opened');
 });
 
-sp.on('open',function() {
-  sp.on('data', function(data) {
-    console.log('>>>>>', data);
-  });
+port.on('error', (error) => {
+  console.error('Oh no error!');
+  console.error(error);
+  process.exit(1);
+});
 
-  var message = new Buffer('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa');
+const largeMessage = Buffer.alloc(1024 * 10, '!');
+// Write will wait for the port to open
+port.write(largeMessage, (error) => {
+  console.log('Write callback returned', error);
+  // When this runs data may still be buffered in the os or node serialport and not sent
+  // out over the port yet. Serialport will wait until any pending writes have completed and then ask
+  // the operating system to wait until all data has been written to the file descriptor.
+});
 
-  function writeThenDrainThenWait(duration) {
-    console.log('Calling write...');
-    sp.write(message, function() {
-      console.log('...Write callback returned...');
-      // At this point, data may still be buffered and not sent out from the port yet (write function returns asynchrounously).
-      console.log('...Calling drain...');
-      sp.drain(function() {
-        // Now data has "left the pipe" (tcdrain[1]/FlushFileBuffers[2] finished blocking).
-        // [1] http://linux.die.net/man/3/tcdrain
-        // [2] http://msdn.microsoft.com/en-us/library/windows/desktop/aa364439(v=vs.85).aspx
-        console.log('...Drain callback returned...');
-        console.log('...Waiting', duration, 'milliseconds...');
-        setInterval(writeThenDrainThenWait, duration);
-      });
-    });
-  };
-
-  function writeThenWait(duration) {
-    console.log('Calling write...');
-    sp.write(message, function() {
-      console.log('...Write callback returned...'); // Write function call immediately returned (asynchrounous).
-      console.log('...Waiting', duration, 'milliseconds...');
-      // Even though write returned, the data may still be in the pipe, and hasn't reached your robot yet.
-      setInterval(writeThenWait, duration);
-    });
-  };
-
-  // Stuff starts happening here
-  writeThenDrainThenWait(1000);
-  //writeThenWait(1000);
-
+console.log('Calling drain');
+// Drain will wait for the port to open and the write to finish
+port.drain((error) => {
+  console.log('Drain callback returned', error);
+  // Now the data has "left the pipe" (tcdrain[1]/FlushFileBuffers[2] finished blocking).
+  // [1] http://linux.die.net/man/3/tcdrain
+  // [2] http://msdn.microsoft.com/en-us/library/windows/desktop/aa364439(v=vs.85).aportx
 });
