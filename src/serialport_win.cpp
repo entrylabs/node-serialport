@@ -363,12 +363,13 @@ void EIO_AfterWatchPort(uv_work_t* req) {
     if (data->errorCode == ERROR_INVALID_HANDLE && IsClosingHandle((int)data->fd)) {
       DisposeWatchPortCallbacks(data);
       goto cleanup;
-    } else {
-      v8::Local<v8::Value> argv[1];
-      argv[0] = Nan::Error(data->errorString);
-      data->errorCallback->Call(1, argv);
-      Sleep(100);  // prevent the errors from occurring too fast
-    }
+    } 
+    // else {
+      // v8::Local<v8::Value> argv[1];
+      // argv[0] = Nan::Error(data->errorString);
+      // data->errorCallback->Call(1, argv);
+      // Sleep(100);  // prevent the errors from occurring too fast
+    // }
   }
   AfterOpenSuccess((int)data->fd, data->dataCallback, data->disconnectedCallback, data->errorCallback);
 
