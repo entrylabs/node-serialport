@@ -363,7 +363,9 @@ void EIO_AfterWatchPort(uv_work_t* req) {
     if (data->errorCode == ERROR_INVALID_HANDLE && IsClosingHandle((int)data->fd)) {
       DisposeWatchPortCallbacks(data);
       goto cleanup;
-    } 
+    } else {
+      Sleep(100);
+    }
     // else {
       // v8::Local<v8::Value> argv[1];
       // argv[0] = Nan::Error(data->errorString);
